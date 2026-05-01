@@ -215,25 +215,59 @@ function App() {
                 )}
 
                 {activeTab === 'calendar' && (
-                  <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-                    <h3 className="text-md font-bold text-gray-800 mb-8">상세 일정 목록</h3>
-                    <div className="space-y-3">
-                      {events.map((event) => (
-                        <div key={event.id} className="flex items-center p-5 hover:bg-gray-50 rounded-2xl border border-gray-50 hover:border-blue-100 transition-all group">
-                          <div className="w-28 flex flex-col">
-                            <span className="text-xs font-black text-blue-500 uppercase">
-                              {new Date(event.start.dateTime || event.start.date).toLocaleDateString('ko-KR', {month: 'short', day: 'numeric'})}
-                            </span>
-                            <span className="text-[10px] text-gray-400 font-bold">
-                              {new Date(event.start.dateTime || event.start.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                            </span>
-                          </div>
-                          <div className="flex-1">
-                            <div className="font-bold text-gray-800 group-hover:text-blue-600 transition-colors">{event.summary}</div>
-                            <div className="text-[11px] text-gray-400 font-medium">{event.location}</div>
-                          </div>
-                        </div>
+                  <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-4 md:p-6 overflow-hidden">
+                    <div className="flex items-center justify-between mb-6">
+                      <h3 className="text-lg font-bold text-gray-800">
+                        {new Date().toLocaleDateString('ko-KR', { year: 'numeric', month: 'long' })}
+                      </h3>
+                    </div>
+                    
+                    {/* Calendar Grid */}
+                    <div className="grid grid-cols-7 gap-px bg-gray-100 border border-gray-100 rounded-xl overflow-hidden">
+                      {['일', '월', '화', '수', '목', '금', '토'].map(day => (
+                        <div key={day} className="bg-gray-50 p-2 text-center text-[10px] font-black text-gray-400 uppercase tracking-widest">{day}</div>
                       ))}
+                      
+                      {(() => {
+                        const now = new Date();
+                        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+                        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                        const startDayOfWeek = firstDay.getDay();
+                        const totalDays = lastDay.getDate();
+                        
+                        const days = [];
+                        // 이전 달 빈 칸
+                        for (let i = 0; i < startDayOfWeek; i++) {
+                          days.push(<div key={`empty-${i}`} className="bg-white h-24 md:h-32 p-1"></div>);
+                        }
+                        
+                        // 현재 달 날짜
+                        for (let d = 1; d <= totalDays; d++) {
+                          const dateStr = new Date(now.getFullYear(), now.getMonth(), d).toISOString().split('T')[0];
+                          const dayEvents = events.filter(e => {
+                            const eDate = (e.start.dateTime || e.start.date).split('T')[0];
+                            return eDate === dateStr;
+                          });
+                          
+                          const isToday = d === now.getDate();
+                          
+                          days.push(
+                            <div key={d} className={`bg-white h-24 md:h-32 p-1 md:p-2 border-t border-l border-gray-50 flex flex-col ${isToday ? 'bg-blue-50/30' : ''}`}>
+                              <span className={`text-[11px] font-bold mb-1 ${isToday ? 'text-blue-600 w-6 h-6 flex items-center justify-center bg-blue-100 rounded-full' : 'text-gray-400'}`}>
+                                {d}
+                              </span>
+                              <div className="flex-1 overflow-y-auto space-y-1 custom-scrollbar">
+                                {dayEvents.map(e => (
+                                  <div key={e.id} className="text-[9px] md:text-[10px] bg-blue-500 text-white px-1.5 py-0.5 rounded-sm truncate font-medium leading-tight" title={e.summary}>
+                                    {e.summary}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        }
+                        return days;
+                      })()}
                     </div>
                   </section>
                 )}
