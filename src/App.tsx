@@ -28,6 +28,7 @@ function App() {
   })
 
   const fetchEvents = async (accessToken: string) => {
+    console.log('Fetching events with token:', accessToken.substring(0, 10) + '...');
     setLoading(true)
     try {
       const response = await axios.get(
@@ -35,16 +36,22 @@ function App() {
         {
           headers: { Authorization: `Bearer ${accessToken}` },
           params: {
-            timeMin: new Date().toISOString(),
-            maxResults: 15,
+            timeMin: new Date(new Date().setHours(0,0,0,0)).toISOString(),
+            maxResults: 30,
             singleEvents: true,
             orderBy: 'startTime',
           },
         }
       )
+      console.log('API Response:', response.data);
       setEvents(response.data.items || [])
-    } catch (error) {
-      console.error('Error fetching events:', error)
+    } catch (error: any) {
+      console.error('Error fetching events:', error);
+      if (error.response) {
+        console.error('Error Status:', error.response.status);
+        console.error('Error Data:', error.response.data);
+      }
+      alert('일정을 불러오지 못했습니다. 권한 설정을 확인해 주세요.');
     } finally {
       setLoading(false)
     }
