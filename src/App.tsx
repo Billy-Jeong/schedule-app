@@ -1,8 +1,20 @@
 import { useState } from 'react'
-import { Calendar, CheckSquare, Settings, LayoutDashboard } from 'lucide-react'
+import { Calendar, CheckSquare, Settings, LayoutDashboard, User } from 'lucide-react'
+import { useGoogleLogin } from '@react-oauth/google'
 
 function App() {
   const [activeTab, setActiveTab] = useState('dashboard')
+  const [user, setUser] = useState<any>(null)
+
+  const login = useGoogleLogin({
+    onSuccess: (tokenResponse) => {
+      console.log(tokenResponse)
+      setUser(tokenResponse)
+      // 여기서 나중에 액세스 토큰을 사용하여 구글 API를 호출할 수 있습니다.
+    },
+    onError: () => console.log('Login Failed'),
+    scope: 'https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/tasks.readonly'
+  })
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row">
@@ -42,9 +54,19 @@ function App() {
         <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 shrink-0">
           <h2 className="text-lg font-semibold text-gray-800 capitalize">{activeTab}</h2>
           <div className="flex items-center space-x-4">
-            <button className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">
-              Login with Google
-            </button>
+            {user ? (
+              <div className="flex items-center space-x-2 bg-blue-50 px-3 py-1.5 rounded-full">
+                <User size={16} className="text-blue-600" />
+                <span className="text-sm font-medium text-blue-700">Logged In</span>
+              </div>
+            ) : (
+              <button 
+                onClick={() => login()}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+              >
+                Login with Google
+              </button>
+            )}
           </div>
         </header>
 
