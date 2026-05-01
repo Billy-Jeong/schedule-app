@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Calendar, CheckSquare, Settings, LayoutDashboard, User, Loader2 } from 'lucide-react'
+import { Calendar, CheckSquare, Settings, LayoutDashboard, User, Loader2, Plus, X } from 'lucide-react'
 import { useGoogleLogin } from '@react-oauth/google'
 import axios from 'axios'
 
@@ -8,6 +8,15 @@ function App() {
   const [user, setUser] = useState<any>(null)
   const [events, setEvents] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  
+  // 새 일정 상태
+  const [newEvent, setNewEvent] = useState({
+    summary: '',
+    location: '',
+    start: '',
+    end: ''
+  })
 
   const login = useGoogleLogin({
     onSuccess: (tokenResponse) => {
@@ -15,7 +24,7 @@ function App() {
       fetchEvents(tokenResponse.access_token)
     },
     onError: () => console.log('Login Failed'),
-    scope: 'https://www.googleapis.com/auth/calendar.readonly'
+    scope: 'https://www.googleapis.com/auth/calendar' // 쓰기 권한을 위해 범위 확장
   })
 
   const fetchEvents = async (accessToken: string) => {
@@ -27,7 +36,7 @@ function App() {
           headers: { Authorization: `Bearer ${accessToken}` },
           params: {
             timeMin: new Date().toISOString(),
-            maxResults: 10,
+            maxResults: 15,
             singleEvents: true,
             orderBy: 'startTime',
           },
@@ -41,12 +50,47 @@ function App() {
     }
   }
 
+  const handleAddEvent = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!user) return
+
+    setLoading(true)
+    try {
+      await axios.post(
+        'https://www.googleapis.com/calendar/v3/calendars/primary/events',
+        {
+          summary: newEvent.summary,
+          location: newEvent.location,
+          start: {
+            dateTime: new Date(newEvent.start).toISOString(),
+            timeZone: 'Asia/Seoul',
+          },
+          end: {
+            dateTime: new Date(newEvent.end).toISOString(),
+            timeZone: 'Asia/Seoul',
+          },
+        },
+        {
+          headers: { Authorization: `Bearer ${user.access_token}` }
+        }
+      )
+      setIsModalOpen(false)
+      setNewEvent({ summary: '', location: '', start: '', end: '' })
+      fetchEvents(user.access_token) // 목록 갱신
+    } catch (error) {
+      console.error('Error adding event:', error)
+      alert('일정 추가에 실패했습니다.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row text-gray-900">
+    <div className="min-h-screen bg-gray-50 flex flex-col md:flex-row text-gray-900 font-sans">
       {/* Sidebar - Desktop */}
       <aside className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col shrink-0">
         <div className="p-6">
-          <h1 className="text-xl font-bold text-blue-600">Scheduler</h1>
+          <h1 className="text-xl font-bold text-blue-600 tracking-tight">Scheduler</h1>
         </div>
         <nav className="flex-1 px-4 space-y-2">
           <NavItem 
@@ -77,19 +121,27 @@ function App() {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Header */}
         <header className="bg-white border-b border-gray-200 h-16 flex items-center justify-between px-6 shrink-0">
-          <h2 className="text-lg font-semibold text-gray-800 capitalize">{activeTab}</h2>
-          <div className="flex items-center space-x-4">
+          <h2 className="text-lg font-bold text-gray-800 capitalize">{activeTab}</h2>
+          <div className="flex items-center space-x-3">
+            {user && (
+              <button 
+                onClick={() => setIsModalOpen(true)}
+                className="bg-blue-600 text-white p-2 rounded-full hover:bg-blue-700 transition-all shadow-md active:scale-95"
+              >
+                <Plus size={20} />
+              </button>
+            )}
             {user ? (
-              <div className="flex items-center space-x-2 bg-blue-50 px-3 py-1.5 rounded-full">
-                <User size={16} className="text-blue-600" />
-                <span className="text-sm font-medium text-blue-700 font-sans">구글 계정 연결됨</span>
+              <div className="flex items-center space-x-2 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100">
+                <User size={14} className="text-blue-600" />
+                <span className="text-[12px] font-bold text-blue-700 uppercase tracking-tighter">CONNECTED</span>
               </div>
             ) : (
               <button 
                 onClick={() => login()}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-bold hover:bg-blue-700 transition-all shadow-sm"
               >
-                Login with Google
+                Google Login
               </button>
             )}
           </div>
@@ -99,25 +151,27 @@ function App() {
         <div className="flex-1 overflow-y-auto p-4 md:p-6">
           <div className="max-w-5xl mx-auto space-y-6">
             {!user ? (
-              <div className="flex flex-col items-center justify-center h-64 bg-white rounded-xl border-2 border-dashed border-gray-200 text-gray-500">
-                <Calendar size={48} className="mb-4 opacity-20" />
-                <p>일정을 확인하려면 구글 로그인이 필요합니다.</p>
+              <div className="flex flex-col items-center justify-center h-80 bg-white rounded-2xl border-2 border-dashed border-gray-200 text-gray-400">
+                <Calendar size={64} className="mb-6 opacity-10" />
+                <p className="font-medium">일정을 관리하려면 로그인이 필요합니다.</p>
               </div>
-            ) : loading ? (
+            ) : loading && events.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64">
-                <Loader2 className="animate-spin text-blue-600 mb-2" size={32} />
-                <p className="text-gray-500 text-sm">일정을 불러오는 중...</p>
+                <Loader2 className="animate-spin text-blue-600 mb-3" size={40} />
+                <p className="text-gray-400 text-sm font-medium">동기화 중...</p>
               </div>
             ) : (
               <>
                 {activeTab === 'dashboard' && (
                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2 space-y-6">
-                      <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <h3 className="text-md font-bold text-gray-700 mb-4 flex items-center">
-                          <Calendar size={18} className="mr-2 text-blue-500" />
-                          다가오는 일정
-                        </h3>
+                      <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 overflow-hidden">
+                        <div className="flex items-center justify-between mb-6">
+                          <h3 className="text-md font-bold text-gray-800 flex items-center">
+                            <div className="w-1.5 h-1.5 bg-blue-500 rounded-full mr-2" />
+                            다가오는 일정
+                          </h3>
+                        </div>
                         <div className="space-y-1">
                           {events.length > 0 ? (
                             events.map((event) => (
@@ -125,25 +179,28 @@ function App() {
                                 key={event.id}
                                 time={new Date(event.start.dateTime || event.start.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                                 title={event.summary}
-                                category={event.location || '장소 미지정'}
+                                category={event.location || '장소 없음'}
                               />
                             ))
                           ) : (
-                            <p className="text-center py-8 text-gray-400 text-sm">일정이 없습니다.</p>
+                            <div className="text-center py-12 text-gray-300">
+                              <Calendar size={32} className="mx-auto mb-2 opacity-50" />
+                              <p className="text-sm">등록된 일정이 없습니다.</p>
+                            </div>
                           )}
                         </div>
                       </section>
                     </div>
 
                     <div className="space-y-6">
-                      <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                        <h3 className="text-md font-bold text-gray-700 mb-4 flex items-center">
-                          <CheckSquare size={18} className="mr-2 text-green-500" />
-                          오늘의 할 일
+                      <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                        <h3 className="text-md font-bold text-gray-800 mb-6 flex items-center">
+                          <div className="w-1.5 h-1.5 bg-green-500 rounded-full mr-2" />
+                          오늘의 체크리스트
                         </h3>
-                        <div className="space-y-3">
-                          <TaskItem title="구글 캘린더 동기화 확인" completed={true} />
-                          <TaskItem title="새로운 일정 추가해보기" completed={false} />
+                        <div className="space-y-4">
+                          <TaskItem title="전체 일정 확인하기" completed={true} />
+                          <TaskItem title="새 일정 등록해보기" completed={false} />
                         </div>
                       </section>
                     </div>
@@ -151,17 +208,22 @@ function App() {
                 )}
 
                 {activeTab === 'calendar' && (
-                  <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 className="text-md font-bold text-gray-700 mb-6">전체 일정 목록</h3>
-                    <div className="space-y-2">
+                  <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+                    <h3 className="text-md font-bold text-gray-800 mb-8">상세 일정 목록</h3>
+                    <div className="space-y-3">
                       {events.map((event) => (
-                        <div key={event.id} className="flex items-center p-4 hover:bg-gray-50 rounded-xl border border-transparent hover:border-gray-100 transition-all">
-                          <div className="w-24 text-sm font-bold text-blue-600">
-                            {new Date(event.start.dateTime || event.start.date).toLocaleDateString('ko-KR', {month: 'short', day: 'numeric'})}
+                        <div key={event.id} className="flex items-center p-5 hover:bg-gray-50 rounded-2xl border border-gray-50 hover:border-blue-100 transition-all group">
+                          <div className="w-28 flex flex-col">
+                            <span className="text-xs font-black text-blue-500 uppercase">
+                              {new Date(event.start.dateTime || event.start.date).toLocaleDateString('ko-KR', {month: 'short', day: 'numeric'})}
+                            </span>
+                            <span className="text-[10px] text-gray-400 font-bold">
+                              {new Date(event.start.dateTime || event.start.date).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                            </span>
                           </div>
                           <div className="flex-1">
-                            <div className="font-semibold text-gray-800">{event.summary}</div>
-                            <div className="text-xs text-gray-500">{event.location}</div>
+                            <div className="font-bold text-gray-800 group-hover:text-blue-600 transition-colors">{event.summary}</div>
+                            <div className="text-[11px] text-gray-400 font-medium">{event.location}</div>
                           </div>
                         </div>
                       ))}
@@ -170,9 +232,10 @@ function App() {
                 )}
 
                 {activeTab === 'tasks' && (
-                  <section className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-                    <h3 className="text-md font-bold text-gray-700 mb-4">할 일 관리</h3>
-                    <p className="text-sm text-gray-400">Google Tasks 연동은 다음 업데이트에서 지원될 예정입니다.</p>
+                  <section className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+                    <CheckSquare size={48} className="mx-auto text-gray-200 mb-4" />
+                    <h3 className="text-md font-bold text-gray-700 mb-2">Google Tasks 연동 준비 중</h3>
+                    <p className="text-sm text-gray-400 max-w-xs mx-auto leading-relaxed">다음 업데이트에서 구글 할 일 목록을 직접 관리할 수 있는 기능이 추가됩니다.</p>
                   </section>
                 )}
               </>
@@ -181,12 +244,70 @@ function App() {
         </div>
       </main>
 
+      {/* Add Event Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="p-6 flex items-center justify-between border-b border-gray-50">
+              <h3 className="text-lg font-bold text-gray-800">새 일정 추가</h3>
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-1">
+                <X size={24} />
+              </button>
+            </div>
+            <form onSubmit={handleAddEvent} className="p-6 space-y-4">
+              <div>
+                <label className="text-[11px] font-black text-gray-400 uppercase mb-1 block">일정 제목</label>
+                <input 
+                  type="text" required value={newEvent.summary}
+                  onChange={e => setNewEvent({...newEvent, summary: e.target.value})}
+                  className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 rounded-xl p-3 text-sm transition-all"
+                  placeholder="무엇을 하나요?"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-black text-gray-400 uppercase mb-1 block">장소 (선택)</label>
+                <input 
+                  type="text" value={newEvent.location}
+                  onChange={e => setNewEvent({...newEvent, location: e.target.value})}
+                  className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 rounded-xl p-3 text-sm transition-all"
+                  placeholder="어디서 하나요?"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[11px] font-black text-gray-400 uppercase mb-1 block">시작 시간</label>
+                  <input 
+                    type="datetime-local" required value={newEvent.start}
+                    onChange={e => setNewEvent({...newEvent, start: e.target.value})}
+                    className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 rounded-xl p-3 text-[12px] transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-black text-gray-400 uppercase mb-1 block">종료 시간</label>
+                  <input 
+                    type="datetime-local" required value={newEvent.end}
+                    onChange={e => setNewEvent({...newEvent, end: e.target.value})}
+                    className="w-full bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 rounded-xl p-3 text-[12px] transition-all"
+                  />
+                </div>
+              </div>
+              <button 
+                type="submit" disabled={loading}
+                className="w-full bg-blue-600 text-white font-bold py-4 rounded-2xl hover:bg-blue-700 shadow-lg shadow-blue-100 transition-all flex items-center justify-center space-x-2 active:scale-[0.98]"
+              >
+                {loading ? <Loader2 size={20} className="animate-spin" /> : <span>구글 캘린더에 저장</span>}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Navigation */}
-      <nav className="md:hidden bg-white border-t border-gray-200 flex justify-around p-2 pb-6 shrink-0">
-        <MobileNavItem icon={<LayoutDashboard size={20} />} active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-        <MobileNavItem icon={<Calendar size={20} />} active={activeTab === 'calendar'} onClick={() => setActiveTab('calendar')} />
-        <MobileNavItem icon={<CheckSquare size={20} />} active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} />
-        <MobileNavItem icon={<Settings size={20} />} active={false} />
+      <nav className="md:hidden bg-white/80 backdrop-blur-md border-t border-gray-100 flex justify-around p-3 pb-8 shrink-0">
+        <MobileNavItem icon={<LayoutDashboard size={22} />} active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
+        <MobileNavItem icon={<Calendar size={22} />} active={activeTab === 'calendar'} onClick={() => setActiveTab('calendar')} />
+        <MobileNavItem icon={<CheckSquare size={22} />} active={activeTab === 'tasks'} onClick={() => setActiveTab('tasks')} />
+        <MobileNavItem icon={<Settings size={22} />} active={false} />
       </nav>
     </div>
   )
@@ -196,12 +317,12 @@ function NavItem({ icon, label, active = false, onClick }: any) {
   return (
     <button 
       onClick={onClick}
-      className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all ${
-        active ? 'bg-blue-50 text-blue-600 shadow-sm' : 'text-gray-500 hover:bg-gray-50'
+      className={`w-full flex items-center space-x-4 px-5 py-3.5 rounded-2xl transition-all ${
+        active ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'text-gray-400 hover:bg-gray-50 hover:text-gray-600'
       }`}
     >
       {icon}
-      <span className="font-semibold text-sm">{label}</span>
+      <span className="font-bold text-[13px]">{label}</span>
     </button>
   )
 }
@@ -210,7 +331,7 @@ function MobileNavItem({ icon, active, onClick }: any) {
   return (
     <button 
       onClick={onClick}
-      className={`flex-1 flex flex-col items-center py-2 rounded-xl ${active ? 'text-blue-600 bg-blue-50' : 'text-gray-400'}`}
+      className={`flex-1 flex flex-col items-center py-2.5 rounded-2xl transition-all ${active ? 'text-blue-600 bg-blue-50' : 'text-gray-400'}`}
     >
       {icon}
     </button>
@@ -219,11 +340,11 @@ function MobileNavItem({ icon, active, onClick }: any) {
 
 function EventItem({ time, title, category }: any) {
   return (
-    <div className="flex items-center space-x-4 p-3.5 hover:bg-gray-50 rounded-xl transition-all cursor-pointer group">
-      <div className="text-[11px] font-black text-blue-500 w-16 bg-blue-50 py-1 px-2 rounded-md text-center">{time}</div>
+    <div className="flex items-center space-x-5 p-4 hover:bg-gray-50 rounded-2xl transition-all cursor-pointer group">
+      <div className="text-[10px] font-black text-blue-600 w-16 bg-blue-50 py-1.5 px-1 rounded-lg text-center">{time}</div>
       <div className="flex-1">
-        <div className="text-sm font-bold text-gray-800 group-hover:text-blue-700 transition-colors">{title}</div>
-        <div className="text-[11px] text-gray-400">{category}</div>
+        <div className="text-sm font-bold text-gray-800 group-hover:text-blue-600 transition-colors leading-tight">{title}</div>
+        <div className="text-[10px] text-gray-400 font-medium mt-0.5">{category}</div>
       </div>
     </div>
   )
@@ -231,16 +352,17 @@ function EventItem({ time, title, category }: any) {
 
 function TaskItem({ title, completed }: any) {
   return (
-    <div className="flex items-center space-x-3 p-2">
-      <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${completed ? 'bg-green-500 border-green-500' : 'border-gray-200'}`}>
-        {completed && <div className="w-2 h-2 bg-white rounded-full" />}
+    <div className="flex items-center space-x-4 p-1">
+      <div className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-all ${completed ? 'bg-green-500 border-green-500' : 'border-gray-200'}`}>
+        {completed && <div className="w-1.5 h-1.5 bg-white rounded-full shadow-sm" />}
       </div>
-      <span className={`text-sm font-medium ${completed ? 'line-through text-gray-300' : 'text-gray-600'}`}>{title}</span>
+      <span className={`text-[13px] font-bold ${completed ? 'line-through text-gray-300' : 'text-gray-600'}`}>{title}</span>
     </div>
   )
 }
 
 export default App
+
 
 
         {/* Content Area */}
